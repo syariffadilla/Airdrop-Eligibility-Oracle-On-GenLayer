@@ -13,6 +13,23 @@ const esc = (s) =>
   String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const shortAddr = (a) => (a ? `${a.slice(0, 6)}…${a.slice(-4)}` : "");
 const nowTime = () => new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+const groupDigits = (s) => String(s ?? "").replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+const groupedAmount = (s) => (/^\d+$/.test(String(s ?? "")) ? groupDigits(s) : String(s ?? ""));
+let elapsedTimer = null;
+function startElapsed() {
+  const t0 = Date.now();
+  stopElapsed();
+  elapsedTimer = setInterval(() => {
+    const el = document.getElementById("elapsedTime");
+    if (el) {
+      const s = Math.floor((Date.now() - t0) / 1000);
+      el.textContent = `Elapsed ${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+    }
+  }, 1000);
+}
+function stopElapsed() {
+  if (elapsedTimer) { clearInterval(elapsedTimer); elapsedTimer = null; }
+}
 
 // Demo wallets, verified live 14-15 Nov 2026 (TAC shard 00.json).
 const TAC_ELIGIBLE = "0x00000000002b00d647a4c78670134888afbc6b5c";
@@ -45,11 +62,12 @@ async function loadStats() {
     const s = await api.stats(rc, CONTRACT_ADDRESS);
     for (const [k, v] of Object.entries(s)) {
       const el = document.querySelector(`[data-stat="${k}"]`);
-      if (el) el.textContent = String(v);
+      if (el) { el.textContent = String(v); el.classList.remove("loading"); }
     }
     $("statsNote").textContent =
       `TTL ${s.ttl_checks} checks · admin ${shortAddr(s.admin)} (deployer account; admin actions are not in this app) · updated ${nowTime()}`;
   } catch (e) {
+    document.querySelectorAll(".stat-num.loading").forEach((el) => el.classList.remove("loading"));
     $("statsNote").textContent = `Could not read stats: ${e.message || e}. The Studio RPC is sometimes slow - try Refresh.`;
   }
 }
@@ -108,8 +126,8 @@ function renderEntries() {
       (e) => `<tr>
         <td>${badge(e.verdict)}</td>
         <td class="mono">${esc(e.project_id)}</td>
-        <td class="mono">${esc(e.wallet)}</td>
-        <td class="num">${esc(e.amount_str || "-")}</td>
+        <td><span class="addr-cell"><span class="mono">${esc(shortAddr(e.wallet))}</span><a href="${esc(addressUrl(e.wallet))}" target="_blank" rel="noopener">View</a><button class="copy-btn" type="button" data-copy="${esc(e.wallet)}">Copy</button></span></td>
+        <td class="num">${esc(e.amount_str ? groupedAmount(e.amount_str) : "-")}</td>
         <td class="num">${esc(e.checked_seq)}</td>
       </tr>`,
     )
@@ -121,6 +139,8 @@ function renderEntries() {
 function renderReceipt({ entry, source, tx, consensus, votes, note }) {
   const box = $("result");
   const v = entry?.verdict || "unchecked";
+  $("resultEmpty").hidden = true;
+  box.className = `receipt verdict-${v}`;
   const agree = votes ? Object.values(votes).filter((x) => x === "agree").length : null;
   const total = votes ? Object.keys(votes).length : null;
   box.hidden = false;
@@ -132,17 +152,17 @@ function renderReceipt({ entry, source, tx, consensus, votes, note }) {
     <dl>
       <div class="row"><dt>Project</dt><dd>${esc(entry?.project_id || "")}</dd></div>
       <div class="row"><dt>Wallet</dt><dd>${esc(entry?.wallet || "")}</dd></div>
-      ${entry?.amount_str ? `<div class="row"><dt>Amount</dt><dd>${esc(entry.amount_str)}</dd></div>` : ""}
+      ${entry?.amount_str ? `<div class="row amount-hero"><dt>Amount</dt><dd>${esc(groupedAmount(entry.amount_str))} <span class="unit">wei</span></dd></div>` : ""}
       ${entry?.source_root ? `<div class="row"><dt>Source root</dt><dd>${esc(entry.source_root)}</dd></div>` : ""}
       ${entry?.source_url ? `<div class="row"><dt>Source URL</dt><dd>${esc(entry.source_url)}</dd></div>` : ""}
       <div class="row"><dt>Status code</dt><dd>${esc(entry?.status_code ?? "")}</dd></div>
       <div class="row"><dt>Checker</dt><dd>${esc(entry?.checker_type || "")}</dd></div>
-      <div class="row"><dt>Fresh</dt><dd>${entry?.fresh ? `yes - checked at sequence ${entry.checked_seq}` : "no - stale, re-check to refresh"}</dd></div>
-      ${entry?.cached ? `<div class="row"><dt>Cached</dt><dd>yes - fresh stored entry returned, no new consensus round</dd></div>` : ""}
+      <div class="row"><dt>Fresh</dt><dd>${entry?.fresh ? `yes. Checked at sequence ${entry.checked_seq}` : "no. Stale, re-check to refresh"}</dd></div>
+      ${entry?.cached ? `<div class="row"><dt>Cached</dt><dd>yes. Fresh stored entry returned, no new consensus round</dd></div>` : ""}
       <div class="row"><dt>Disputes</dt><dd>${esc(entry?.disputes ?? 0)}</dd></div>
       <div class="row"><dt>Source</dt><dd class="plain">${esc(source)}</dd></div>
-      ${tx ? `<div class="row"><dt>Transaction</dt><dd><a href="${esc(txUrl(tx))}" target="_blank" rel="noopener">${esc(tx)}</a></dd></div>` : ""}
-      ${consensus ? `<div class="row"><dt>Consensus</dt><dd>${esc(consensus)}${agree !== null ? ` - ${agree} of ${total} validators agreed` : ""}</dd></div>` : ""}
+      ${tx ? `<div class="row"><dt>Transaction</dt><dd><a href="${esc(txUrl(tx))}" target="_blank" rel="noopener">${esc(tx)}</a><button class="copy-btn" type="button" data-copy="${esc(tx)}">Copy</button></dd></div>` : ""}
+      ${consensus ? `<div class="row"><dt>Consensus</dt><dd>${esc(consensus)}${agree !== null ? `. ${agree} of ${total} validators agreed` : ""}</dd></div>` : ""}
       ${note ? `<div class="row"><dt>Note</dt><dd class="plain">${esc(note)}</dd></div>` : ""}
     </dl>`;
   box.scrollIntoView({ behavior: "smooth", block: "nearest" });
@@ -151,17 +171,19 @@ function renderReceipt({ entry, source, tx, consensus, votes, note }) {
 function renderUnchecked({ projectId, walletAddr, tx, consensus, note }) {
   const box = $("result");
   box.hidden = false;
+  $("resultEmpty").hidden = true;
+  box.className = "receipt verdict-unchecked";
   box.innerHTML = `
     <div class="receipt-head"><h3>Unchecked</h3>${badge("unchecked")}</div>
     <dl>
       <div class="row"><dt>Project</dt><dd>${esc(projectId)}</dd></div>
       <div class="row"><dt>Wallet</dt><dd>${esc(walletAddr)}</dd></div>
-      <div class="row"><dt>Verdict</dt><dd>unchecked - no verdict was written</dd></div>
-      ${tx ? `<div class="row"><dt>Transaction</dt><dd><a href="${esc(txUrl(tx))}" target="_blank" rel="noopener">${esc(tx)}</a></dd></div>` : ""}
+      <div class="row"><dt>Verdict</dt><dd>unchecked. No verdict was written.</dd></div>
+      ${tx ? `<div class="row"><dt>Transaction</dt><dd><a href="${esc(txUrl(tx))}" target="_blank" rel="noopener">${esc(tx)}</a><button class="copy-btn" type="button" data-copy="${esc(tx)}">Copy</button></dd></div>` : ""}
       ${consensus ? `<div class="row"><dt>Consensus</dt><dd>${esc(consensus)}</dd></div>` : ""}
       <div class="row"><dt>Note</dt><dd class="plain">${esc(
         note ||
-          "Validators could not agree, or the source could not be fetched with a usable HTTP 200 response, so by design nothing was written. This is not an error in the oracle.",
+          "Validators could not agree, or the source could not be fetched with a usable HTTP 200 response, so by design nothing was written. This is not an error in the oracle. Try Look up later, or run a check again.",
       )}</dd></div>
     </dl>`;
   box.scrollIntoView({ behavior: "smooth", block: "nearest" });
@@ -196,6 +218,7 @@ async function doLookup(projectId, walletAddr) {
   setBusy(true);
   setTxStatus("");
   $("result").hidden = true;
+  $("resultEmpty").hidden = false;
   try {
     const entry = await api.eligibility(rc, CONTRACT_ADDRESS, projectId, walletAddr);
     if (entry.verdict === "unchecked") {
@@ -203,7 +226,7 @@ async function doLookup(projectId, walletAddr) {
     } else {
       renderReceipt({
         entry,
-        source: "Read-only lookup (get_eligibility) - no transaction.",
+        source: "Read-only lookup (get_eligibility). No transaction.",
       });
     }
   } catch (e) {
@@ -219,21 +242,26 @@ async function doCheck(projectId, walletAddr) {
     return;
   }
   setBusy(true);
-  setTxStatus(`<span class="stage">Preparing check…</span>`);
+  $("txStatus").classList.add("loading");
+  setTxStatus(`<span class="stage">Preparing check…</span><div class="progress"><span></span></div>`);
   $("result").hidden = true;
+  $("resultEmpty").hidden = false;
   try {
     const summary = await api.checkEligibility(wallet.client, CONTRACT_ADDRESS, projectId, walletAddr, (stage, info) => {
       if (stage === "sent") {
+        startElapsed();
         setTxStatus(
-          `<span class="stage">Submitted - waiting for consensus…</span><br/>` +
+          `<span class="stage">Submitted. Waiting for consensus…</span> <span class="elapsed" id="elapsedTime">Elapsed 0:00</span><br/>` +
             `<span class="mono">tx <a href="${esc(txUrl(info.hash))}" target="_blank" rel="noopener">${esc(info.hash)}</a></span><br/>` +
-            `<span class="fineprint">Validators are fetching the source now. This usually takes about a minute.</span>`,
+            `<span class="fineprint">Validators are fetching the source now. This usually takes about a minute.</span>` +
+            `<div class="stepper"><div class="step done"><span class="step-dot">✓</span>Submitted</div><div class="step active"><span class="step-dot"></span>Validators fetching</div><div class="step"><span class="step-dot">3</span>Finalized</div></div>` +
+            `<div class="progress"><span></span></div>`,
         );
       }
     });
     if (summary.undetermined) {
       setTxStatus(
-        `<span class="stage">Finalized - undetermined.</span><br/>` +
+        `<span class="stage">Finalized. Undetermined.</span><br/>` +
           `<span class="mono">tx <a href="${esc(txUrl(summary.hash))}" target="_blank" rel="noopener">${esc(summary.hash)}</a></span>`,
       );
       renderUnchecked({ projectId, walletAddr, tx: summary.hash, consensus: summary.consensus });
@@ -242,12 +270,12 @@ async function doCheck(projectId, walletAddr) {
         ? summary.returned
         : await api.entry(rc, CONTRACT_ADDRESS, projectId, walletAddr);
       setTxStatus(
-        `<span class="stage">Finalized - ${esc(summary.consensus || "accepted")}.</span><br/>` +
+        `<span class="stage">Finalized. ${esc(summary.consensus || "accepted")}.</span><br/>` +
           `<span class="mono">tx <a href="${esc(txUrl(summary.hash))}" target="_blank" rel="noopener">${esc(summary.hash)}</a></span>`,
       );
       renderReceipt({
         entry,
-        source: `On-chain check (check_eligibility)${entry.cached ? " - fresh stored entry returned, no new consensus round" : " - new consensus round"}.`,
+        source: `On-chain check (check_eligibility)${entry.cached ? ". Fresh stored entry returned, no new consensus round" : ". New consensus round"}.`,
         tx: summary.hash,
         consensus: summary.consensus,
         votes: summary.votes,
@@ -259,6 +287,8 @@ async function doCheck(projectId, walletAddr) {
   } catch (e) {
     setTxStatus(`<span class="stage">Check failed.</span> ${esc(e.message || e)}`);
   } finally {
+    stopElapsed();
+    $("txStatus").classList.remove("loading");
     setBusy(false);
     await refreshAll();
   }
@@ -338,16 +368,29 @@ $("demoAbsentBtn").addEventListener("click", () => {
 $("refreshBtn").addEventListener("click", refreshAll);
 $("connectBtn").addEventListener("click", connectWallet);
 
+document.addEventListener("click", async (ev) => {
+  const btn = ev.target.closest("[data-copy]");
+  if (!btn || !btn.dataset.copy) return;
+  try {
+    await navigator.clipboard.writeText(btn.dataset.copy);
+    const label = btn.textContent;
+    btn.textContent = "Copied";
+    setTimeout(() => { btn.textContent = label; }, 1500);
+  } catch (e) {
+    /* clipboard unavailable; the link next to it still works */
+  }
+});
+
 if (window.ethereum) {
   window.ethereum.on?.("accountsChanged", () => {
     wallet = null;
     $("connectBtn").textContent = "Connect wallet";
-    $("walletStatus").textContent = "Read-only - no wallet connected";
+    $("walletStatus").textContent = "Read-only. No wallet connected.";
   });
   window.ethereum.on?.("chainChanged", () => {
     wallet = null;
     $("connectBtn").textContent = "Connect wallet";
-    $("walletStatus").textContent = "Read-only - no wallet connected";
+    $("walletStatus").textContent = "Read-only. No wallet connected.";
   });
 }
 
@@ -366,8 +409,9 @@ if (!DEPLOYED) {
   $("demoAbsentBtn").disabled = true;
 } else {
   $("contractAddr").textContent = CONTRACT_ADDRESS;
-  $("contractLink").textContent = CONTRACT_ADDRESS;
   $("contractLink").href = `${EXPLORER}/address/${CONTRACT_ADDRESS}`;
+  const copyBtn = $("copyContractBtn");
+  if (copyBtn) copyBtn.dataset.copy = CONTRACT_ADDRESS;
   refreshAll();
 }
 loadProjects();
