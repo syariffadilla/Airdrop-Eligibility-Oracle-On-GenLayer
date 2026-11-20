@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Airdrop Eligibility Oracle - is this wallet eligible?</title>
+  <meta name="description" content="Ask GenLayer validators whether a wallet is eligible for an airdrop, and for how much. Validators fetch the project's own eligibility source and agree exactly before any verdict is written." />
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,500;6..72,600;6..72,700&family=Archivo:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/src/style.css" />
+</head>
+<body>
+  <div class="page">
+    <header class="masthead">
+      <div class="masthead-top">
+        <p class="kicker">GenLayer Studionet &middot; Intelligent Contract &middot; Chain 61999</p>
+        <button id="connectBtn" class="btn btn-ink" type="button">Connect wallet</button>
+      </div>
+      <h1>Airdrop Eligibility Oracle</h1>
+      <p class="lede">Is this wallet eligible for this airdrop, and for how much? Validators
+      fetch the project's own eligibility source and re-derive the same signals; a verdict is
+      written only when they agree exactly. Disagreement writes nothing.</p>
+      <dl class="contract-line">
+        <div><dt>Contract</dt><dd><a class="mono" id="contractLink" href="#" target="_blank" rel="noopener"><span id="contractAddr">not deployed yet</span></a></dd></div>
+        <div><dt>Network</dt><dd>Studionet &middot; testnet &middot; test GEN only</dd></div>
+        <div><dt>Status</dt><dd id="walletStatus">Read-only  -  no wallet connected</dd></div>
+      </dl>
+      <div id="notDeployed" class="tx-status" hidden>
+        <span class="stage">Contract not deployed yet.</span>
+        This demo is waiting for the Studionet deploy. Once the contract is live, its address goes
+        in <span class="mono">src/config.js</span> and this page starts working. Nothing here is
+        a real result until then.
+      </div>
+    </header>
+
+    <section class="stats" aria-label="Oracle statistics">
+      <h2 class="section-label">Oracle at a glance</h2>
+      <div class="stat-grid" id="statGrid">
+        <div class="stat"><span class="stat-num" data-stat="total_entries">&ndash;</span><span class="stat-label">Entries</span></div>
+        <div class="stat"><span class="stat-num" data-stat="check_count">&ndash;</span><span class="stat-label">Checks run</span></div>
+        <div class="stat"><span class="stat-num stat-safe" data-stat="eligible">&ndash;</span><span class="stat-label">Eligible</span></div>
+        <div class="stat"><span class="stat-num" data-stat="not_eligible">&ndash;</span><span class="stat-label">Not eligible</span></div>
+        <div class="stat"><span class="stat-num" data-stat="total_projects">&ndash;</span><span class="stat-label">Projects</span></div>
+        <div class="stat"><span class="stat-num stat-disputed" data-stat="total_disputes">&ndash;</span><span class="stat-label">Disputes</span></div>
+      </div>
+      <p class="fineprint" id="statsNote">Reading the contract&hellip;</p>
+    </section>
+
+    <main>
+      <section class="check" aria-label="Check a wallet">
+        <h2 class="section-label"><span class="section-no">01</span> Check a wallet</h2>
+        <form id="checkForm">
+          <label class="field-label" for="projectSelect">Airdrop project</label>
+          <div class="check-row">
+            <select id="projectSelect" class="mono"></select>
+          </div>
+          <p class="fineprint" id="hypeNote"></p>
+          <label class="field-label" for="walletInput">Wallet address</label>
+          <div class="check-row">
+            <input id="walletInput" class="mono" type="text" inputmode="text" autocomplete="off"
+              placeholder="0x00000000002b00d647a4c78670134888afbc6b5c" spellcheck="false" required />
+            <button class="btn btn-ink" type="submit" id="checkBtn">Check on-chain</button>
+            <button class="btn btn-outline" type="button" id="lookupBtn">Look up</button>
+          </div>
+          <p class="fineprint">
+            <strong>Check on-chain</strong> runs a consensus round and writes the verdict (needs a
+            wallet on Studionet; about a minute). <strong>Look up</strong> reads the stored verdict
+            without a transaction and works without a wallet. A source that cannot be fetched
+            ends <em>unchecked</em>  -  no verdict is written from partial data.
+          </p>
+          <div class="demo-row">
+            <span class="fineprint">Try it:</span>
+            <button class="btn btn-outline btn-small" type="button" id="demoEligibleBtn">TAC eligible demo wallet</button>
+            <button class="btn btn-outline btn-small" type="button" id="demoAbsentBtn">TAC absent demo wallet</button>
+          </div>
+          <p class="fineprint">The TAC eligible wallet should read ELIGIBLE with amount
+          <span class="mono">14784700000000000</span> wei. The absent wallet should read
+          NOT ELIGIBLE.</p>
+        </form>
+
+        <div id="txStatus" class="tx-status" hidden></div>
+        <div id="result" class="receipt" hidden></div>
+      </section>
+
+      <section class="registry" aria-label="Recent entries">
+        <div class="section-head">
+          <h2 class="section-label"><span class="section-no">02</span> Recent entries</h2>
+          <button class="btn btn-outline btn-small" type="button" id="refreshBtn">Refresh</button>
+        </div>
+        <p class="fineprint">Newest first. Every entry is a verdict the validators agreed on.</p>
+        <div id="entriesWrap">
+          <p class="fineprint" id="entriesNote">Reading the contract&hellip;</p>
+          <table class="ledger" id="entriesTable" hidden>
+            <thead>
+              <tr><th>Verdict</th><th>Project</th><th>Wallet</th><th>Amount</th><th>Seq</th></tr>
+            </thead>
+            <tbody id="entriesBody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="how" aria-label="How a check works">
+        <h2 class="section-label"><span class="section-no">03</span> How a check works</h2>
+        <ol class="steps">
+          <li><strong>Submit.</strong> Any account can ask the contract to check a wallet against a registered airdrop.</li>
+          <li><strong>Fetch.</strong> The leader fetches the project's own eligibility source; every validator fetches it again and derives the same signals  -  wallet found or not, amount, source root, status code.</li>
+          <li><strong>Agree.</strong> The verdict is written only when validators agree exactly on all nine compared signals. A claim page on another domain can never produce ELIGIBLE, because only the registered source is ever fetched.</li>
+        </ol>
+        <p class="fineprint">The verdict is a deterministic lookup, not a model opinion. The same wallet
+        checked twice gives the same verdict, and any reviewer can re-derive it from the stored
+        evidence. The TAC demo pins its verdict to the on-chain Merkle root of the allocation list.
+        <a data-repo-link href="#" target="_blank" rel="noopener" hidden>Source and tests</a><span data-repo-link hidden> · </span>GenLayer docs:
+        <a href="https://docs.genlayer.com/" target="_blank" rel="noopener">docs.genlayer.com</a>.</p>
+      </section>
+    </main>
+
+    <footer>
+      <p>Airdrop Eligibility Oracle  -  GenLayer Studionet testnet. Test GEN only; nothing here has
+      real value. zkVerify Agent Games Wildcard entry: the oracle does not use zkVerify. What can be
+      checked is the TAC Merkle root on-chain and the exact validator agreement behind each verdict.</p>
+    </footer>
+  </div>
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>

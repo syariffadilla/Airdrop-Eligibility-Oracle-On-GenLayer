@@ -1,0 +1,45 @@
+{
+  "checks": [
+    {
+      "name": "projects_registered",
+      "ok": true,
+      "detail": "total=2 in 0.3s",
+      "seconds": 0.3
+    },
+    {
+      "name": "tac_live_eligible",
+      "ok": true,
+      "detail": "verdict=eligible amount=14784700000000000 root=0x27451b320d5aa9631f7a3fd8adcfa537db8d792dd49aad9ab0951af0c2986a10",
+      "seconds": 5.3
+    },
+    {
+      "name": "tac_live_not_eligible",
+      "ok": true,
+      "detail": "verdict=not_eligible amount=''",
+      "seconds": 4.3
+    },
+    {
+      "name": "hype_live_eligible",
+      "ok": false,
+      "detail": "verdict=unchecked amount=",
+      "seconds": 0.3
+    },
+    {
+      "name": "hype_live_not_eligible",
+      "ok": false,
+      "detail": "verdict=unchecked amount=''",
+      "seconds": 0.3
+    }
+  ],
+  "contract_address": "0x2b87a8a0e03c5c3fced6a83f29f90c12cf9b6f96",
+  "stats": {
+    "admin": "0x223D06b097e7633529b6013329647671CBc5401D",
+    "check_count": 2,
+    "eligible": 1,
+    "not_eligible": 1,
+    "total_disputes": 0,
+    "total_entries": 2,
+    "total_projects": 2,
+    "ttl_checks": 1000
+  }
+}
